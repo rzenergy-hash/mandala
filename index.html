@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Mandala</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <canvas id="woven"></canvas>
+
+  <div id="hint" class="hint hidden">move the cursor to weave &middot; click once for sound</div>
+
+  <!-- turns a grayscale dissolve mask into an alpha mask (image-to-image "turning") -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="lumA"><feColorMatrix type="luminanceToAlpha" /></filter>
+  </svg>
+
+  <!-- OPTIONAL offline bundle: run embed.sh to create js/artwork-embed.js so the
+       piece also runs by double-clicking index.html. Harmless 404 if absent. -->
+  <script src="js/artwork-embed.js" onerror="this.remove()"></script>
+
+  <!-- shared math / noise / rng -->
+  <script src="js/lib.js?v=25"></script>
+
+  <!-- dense drifting fiber field that dissolves into the artwork image -->
+  <script src="js/fiber-overlay.js?v=25"></script>
+  <script src="js/interaction.js?v=25"></script>
+  <script src="js/audio.js?v=25"></script>
+  <script src="js/main.js?v=25"></script>
+
+  <script>
+    (function () {
+      var hint = document.getElementById('hint');
+      var evs = ['pointerdown', 'click', 'touchstart', 'keydown'];
+      var hide = function () {
+        hint.classList.add('gone');
+        evs.forEach(function (e) { window.removeEventListener(e, hide); });
+      };
+      // keep the "click once for sound" prompt visible during hover; dismiss it
+      // only on the click/tap/key that actually starts the audio
+      evs.forEach(function (e) { window.addEventListener(e, hide, { passive: true }); });
+      setTimeout(hide, 20000);
+
+      // the crosshair cursor is hidden by default for an unbroken view; a
+      // double-click toggles it back on (and off again) if you want to aim
+      var canvas = document.getElementById('woven');
+      canvas.addEventListener('dblclick', function () {
+        canvas.classList.toggle('show-cursor');
+      });
+    })();
+  </script>
+</body>
+</html>
