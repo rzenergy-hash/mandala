@@ -26,6 +26,7 @@
     imageDisc: 0.62,     // crisp-image disc as a fraction of the gather field (smaller = tighter)
     revealDelay: 1.6,    // seconds of hovering before the image starts to appear
     revealDuration: 3.0, // seconds for the image to fully dissolve in
+    imageRotate: 0.03,   // radians/sec the revealed artwork slowly turns (0 = still)
   };
 
   class WovenApp {
@@ -252,19 +253,30 @@
       if (revealA <= 0.004) return;
       const q = W.clamp(L * 1.15, 0, 1.12);       // dissolve progress
       const R = a.radius * CONFIG.imageDisc, s = R / this.discMax, half = Math.ceil(this.discTex.width * 0.5 * s);
-      // clamp the bbox to the IMAGE region (not the whole canvas) so we never
-      // sample outside the picture — that overflow was what made the reveal
-      // appear to shift on the left/right when the window isn't 3:2 (letterbox)
-      const x0 = Math.max(m.ox, (a.x - half) | 0), y0 = Math.max(m.oy, (a.y - half) | 0);
-      const x1 = Math.min(m.ox + m.dw, Math.ceil(a.x + half)), y1 = Math.min(m.oy + m.dh, Math.ceil(a.y + half));
+      // bbox = the disc's bounding box, clamped only to the CANVAS (not the image
+      // rectangle). Clamping to the image rect used to slice the circular disc into
+      // a hard-edged box whenever the cursor was near an edge of the framed artwork;
+      // instead we let the disc keep its full extent and draw the picture softly
+      // inside it (anything outside the artwork simply stays transparent -> fibers).
+      const x0 = Math.max(0, (a.x - half) | 0), y0 = Math.max(0, (a.y - half) | 0);
+      const x1 = Math.min(this.W, Math.ceil(a.x + half)), y1 = Math.min(this.H, Math.ceil(a.y + half));
       const bw = x1 - x0, bh = y1 - y0;
       if (bw <= 0 || bh <= 0) return;
       const tc = this.tctx, mc = this.mctx, dpr = this.dpr, img = this.finalImg;
 
-      // 1) final image into tmp
+      // 1) the whole (soft-edged) artwork into tmp, SLOWLY ROTATED about its centre,
+      //    clipped to the disc bbox. drawImage only paints where the picture is, so
+      //    the area of the disc beyond the artwork's feathered edge stays transparent
+      //    and melts into the gathered threads — no hard rectangular cut.
+      const icx = m.ox + m.dw / 2, icy = m.oy + m.dh / 2;
+      const ang = this.time * CONFIG.imageRotate;
       tc.clearRect(x0, y0, bw, bh);
       tc.globalCompositeOperation = 'source-over';
-      this._drawImgBbox(tc, img, m, x0, y0, bw, bh);
+      tc.save();
+      tc.beginPath(); tc.rect(x0, y0, bw, bh); tc.clip();
+      tc.translate(icx, icy); tc.rotate(ang);
+      tc.drawImage(img, -m.dw / 2, -m.dh / 2, m.dw, m.dh);
+      tc.restore();
 
       // 2) dissolve alpha into mask: A = clamp(noise + (2q-1)) (cheap uniform),
       //    then multiply by the pre-baked soft disc for the melting radial edge
