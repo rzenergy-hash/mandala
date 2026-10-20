@@ -38,10 +38,17 @@
       for (let i = 0, p = 0; i < SW * SH; i++, p += 4) lum[i] = 0.3 * data[p] + 0.59 * data[p + 1] + 0.11 * data[p + 2];
       const paperLum = 0.3 * data[8] + 0.59 * data[9] + 0.11 * data[10] || 210;
 
-      // contain-fit the image inside the canvas (main.js draws the PNG the same way)
+      // contain-fit the image inside the canvas (main.js reveals it the same way),
+      // then shrink by PAD so the artwork keeps a margin on every side. The mandala's
+      // line-work runs right to the edge of its own frame, so a plain contain-fit puts
+      // the outer loops exactly on the window border — where a browser with slightly
+      // different chrome height or pixel rounding clips them. The margin guarantees the
+      // whole piece stays visible at any viewport size, on any browser.
+      const PAD = 0.9;
       const aspect = img.naturalWidth / img.naturalHeight;
       let dw = cw, dh = cw / aspect;
       if (dh > ch) { dh = ch; dw = ch * aspect; }
+      dw *= PAD; dh *= PAD;
       const ox = (cw - dw) / 2, oy = (ch - dh) / 2;
       this.map = { ox, oy, dw, dh };
       this.bg = [data[8], data[9], data[10]];
