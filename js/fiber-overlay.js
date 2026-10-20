@@ -18,7 +18,7 @@
   const EASE_UP = 0.10, EASE_DOWN = 0.045; // gather on hover; fly away when the cursor stops
   const BANDS = 6;
   const BAND_ALPHA = [0.10, 0.18, 0.30, 0.46, 0.62, 0.74];
-  const WIDTHS = [1.1, 1.8];
+  const WIDTHS = [0.6, 1.0]; // hair-fine threads for the delicate line-art
 
   W.FiberOverlay = class FiberOverlay {
     constructor(img, cw, ch, noise, rng, count) {
@@ -44,7 +44,7 @@
       // the outer loops exactly on the window border — where a browser with slightly
       // different chrome height or pixel rounding clips them. The margin guarantees the
       // whole piece stays visible at any viewport size, on any browser.
-      const PAD = 0.9;
+      const PAD = 0.84;
       const aspect = img.naturalWidth / img.naturalHeight;
       let dw = cw, dh = cw / aspect;
       if (dh > ch) { dh = ch; dw = ch * aspect; }
@@ -132,13 +132,15 @@
           lx[n] = HX + dx; ly[n] = HY + dy;
         }
 
-        // a deliberate mix of short stitches and long threads — and some of the
-        // long ones are long CURVED lines (a perpendicular bow)
-        const isLong = rng() < 0.32;
-        const isVeryLong = isLong && rng() < 0.35;
-        const lf = isVeryLong ? (7 + rng() * 8) : isLong ? (3.2 + rng() * 3.6) : (0.7 + rng() * 1.4);
-        len[n] = pxPer * lf * (0.85 + e.m * 0.6) * (0.38 + dep * 1.0);
-        curveMag[n] = isVeryLong ? (rng() - 0.5) * len[n] * 0.7 : 0;
+        // a deliberate, wide mix of lengths — many tiny stitches, a good number of
+        // medium threads, and some long sweeping strands (the longest are CURVED,
+        // bowing through a perpendicular control point) — so the field reads as
+        // hair-fine thread rather than uniform dashes
+        const isLong = rng() < 0.34;
+        const isVeryLong = isLong && rng() < 0.42;
+        const lf = isVeryLong ? (10 + rng() * 16) : isLong ? (3.0 + rng() * 5.0) : (0.45 + rng() * 1.25);
+        len[n] = pxPer * lf * (0.85 + e.m * 0.6) * (0.4 + dep * 1.0);
+        curveMag[n] = isVeryLong ? (rng() - 0.5) * len[n] * 0.8 : 0;
         phase[n] = rng() * Math.PI * 2;
         n++;
       }
@@ -254,7 +256,7 @@
       const ex0 = this.ex0, ey0 = this.ey0, ex1 = this.ex1, ey1 = this.ey1, cm = this.curveMag;
       // far fibers are thinner, near ones thicker — draw back → mid → front so the
       // layers physically stack, deepening the field
-      const depthW = [0.58, 1.0, 1.55];
+      const depthW = [0.55, 0.85, 1.2];
       for (let lvl = 0; lvl < 3; lvl++) {
         const wmul = depthW[lvl];
         for (let s = 0; s < buckets.length; s++) {
