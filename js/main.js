@@ -264,16 +264,18 @@
       if (bw <= 0 || bh <= 0) return;
       const tc = this.tctx, mc = this.mctx, dpr = this.dpr, img = this.finalImg;
 
-      // 1) the whole (soft-edged) artwork into tmp, SLOWLY ROTATED about its centre,
-      //    clipped to the disc bbox. drawImage only paints where the picture is, so
-      //    the area of the disc beyond the artwork's feathered edge stays transparent
-      //    and melts into the gathered threads — no hard rectangular cut.
+      // 1) the whole (soft-edged) artwork into tmp, SLOWLY ROTATED about its centre.
+      //    We draw the FULL picture with NO clip() — Safari renders a clipped,
+      //    transformed drawImage differently from Chrome and would slice the reveal
+      //    into a hard-edged box. Instead the dissolve mask below keeps only the disc,
+      //    and where the artwork's feathered edge ends tmp is transparent, so the
+      //    reveal melts into the threads with no hard cut, identically in every browser.
       const icx = m.ox + m.dw / 2, icy = m.oy + m.dh / 2;
       const ang = this.time * CONFIG.imageRotate;
-      tc.clearRect(x0, y0, bw, bh);
+      tc.setTransform(dpr, 0, 0, dpr, 0, 0);
+      tc.clearRect(0, 0, this.W, this.H);
       tc.globalCompositeOperation = 'source-over';
       tc.save();
-      tc.beginPath(); tc.rect(x0, y0, bw, bh); tc.clip();
       tc.translate(icx, icy); tc.rotate(ang);
       tc.drawImage(img, -m.dw / 2, -m.dh / 2, m.dw, m.dh);
       tc.restore();

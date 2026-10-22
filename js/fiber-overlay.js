@@ -18,7 +18,7 @@
   const EASE_UP = 0.10, EASE_DOWN = 0.045; // gather on hover; fly away when the cursor stops
   const BANDS = 6;
   const BAND_ALPHA = [0.10, 0.18, 0.30, 0.46, 0.62, 0.74];
-  const WIDTHS = [0.6, 1.0]; // hair-fine threads for the delicate line-art
+  const WIDTHS = [0.6, 1.0, 0.4]; // hair-fine threads; index 2 = extra-thin filaments
 
   W.FiberOverlay = class FiberOverlay {
     constructor(img, cw, ch, noise, rng, count) {
@@ -62,6 +62,7 @@
       const cosL = new Float32Array(N), sinL = new Float32Array(N);
       const len = new Float32Array(N), phase = new Float32Array(N);
       const curveMag = new Float32Array(N); // perpendicular bow for long curved threads
+      const skinny = new Uint8Array(N);     // 1 = a long extra-thin filament
       const depth = new Float32Array(N);    // 0 = far/back (small, hazy), 1 = near/front
       const dlevel = new Int8Array(N);      // coarse back/mid/front band for draw order
       const cr = new Uint8Array(N), cg = new Uint8Array(N), cb = new Uint8Array(N);
@@ -133,14 +134,20 @@
         }
 
         // a deliberate, wide mix of lengths — many tiny stitches, a good number of
-        // medium threads, and some long sweeping strands (the longest are CURVED,
-        // bowing through a perpendicular control point) — so the field reads as
-        // hair-fine thread rather than uniform dashes
+        // medium threads, and some long strands. Threads are mostly STRAIGHT now:
+        // only the longest get a very slight bow, and ~3% are long, extra-thin,
+        // dead-straight FILAMENTS that streak across the field.
+        const isFilament = rng() < 0.03;
         const isLong = rng() < 0.34;
         const isVeryLong = isLong && rng() < 0.42;
-        const lf = isVeryLong ? (10 + rng() * 16) : isLong ? (3.0 + rng() * 5.0) : (0.45 + rng() * 1.25);
+        const lf = isFilament ? (22 + rng() * 26)
+          : isVeryLong ? (10 + rng() * 16)
+          : isLong ? (3.0 + rng() * 5.0)
+          : (0.45 + rng() * 1.25);
         len[n] = pxPer * lf * (0.85 + e.m * 0.6) * (0.4 + dep * 1.0);
-        curveMag[n] = isVeryLong ? (rng() - 0.5) * len[n] * 0.8 : 0;
+        // a gentle bow only on the long non-filament threads; filaments stay straight
+        curveMag[n] = (isVeryLong && !isFilament) ? (rng() - 0.5) * len[n] * 0.28 : 0;
+        skinny[n] = isFilament ? 1 : 0;
         phase[n] = rng() * Math.PI * 2;
         n++;
       }
@@ -148,7 +155,7 @@
       this.hx = hx; this.hy = hy; this.lx = lx; this.ly = ly;
       this.cosH = cosH; this.sinH = sinH; this.cosL = cosL; this.sinL = sinL;
       this.len = len; this.phase = phase; this.cr = cr; this.cg = cg; this.cb = cb;
-      this.curveMag = curveMag; this.depth = depth; this.dlevel = dlevel;
+      this.curveMag = curveMag; this.depth = depth; this.dlevel = dlevel; this.skinny = skinny;
 
       // dynamic state
       this.cx = new Float32Array(n); this.cy = new Float32Array(n);
@@ -233,8 +240,9 @@
 
     _slot(r, g, b, wc, bnd, dl) {
       // fold depth-band + colour + width-class + weave-band into one key so every
-      // fiber is bucketed once and each bucket is a single stroke() at a fixed opacity
-      const key = (((((r >> 4) << 9) | ((g >> 4) << 5) | ((b >> 4) << 1) | wc) * BANDS) + bnd) * 3 + dl;
+      // fiber is bucketed once and each bucket is a single stroke() at a fixed opacity.
+      // wc gets 2 bits (0 light / 1 dark / 2 skinny filament), so shift the colour up.
+      const key = (((((r >> 4) << 10) | ((g >> 4) << 6) | ((b >> 4) << 2) | wc) * BANDS) + bnd) * 3 + dl;
       let s = this.map_.get(key);
       if (s === undefined) {
         s = this.buckets.length; this.map_.set(key, s); this.buckets.push([]);
@@ -245,12 +253,13 @@
     }
 
     draw(ctx) {
-      const N = this.N, band = this.band, cr = this.cr, cg = this.cg, cb = this.cb, dlv = this.dlevel;
+      const N = this.N, band = this.band, cr = this.cr, cg = this.cg, cb = this.cb, dlv = this.dlevel, sk = this.skinny;
       const buckets = this.buckets, sdepth = this.sdepth;
       for (let s = 0; s < buckets.length; s++) buckets[s].length = 0;
       for (let i = 0; i < N; i++) {
         const lum = 0.3 * cr[i] + 0.59 * cg[i] + 0.11 * cb[i];
-        buckets[this._slot(cr[i], cg[i], cb[i], lum < 120 ? 1 : 0, band[i], dlv[i])].push(i);
+        const wc = sk[i] ? 2 : (lum < 120 ? 1 : 0);
+        buckets[this._slot(cr[i], cg[i], cb[i], wc, band[i], dlv[i])].push(i);
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       const ex0 = this.ex0, ey0 = this.ey0, ex1 = this.ex1, ey1 = this.ey1, cm = this.curveMag;
