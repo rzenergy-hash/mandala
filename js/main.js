@@ -31,7 +31,10 @@
     zoomSpeed: 0.24,     // speed of the zoom-in/zoom-out breathing loop (rad/sec) — 50% faster
     holdZoomAmp: 0.55,   // extra scale-up the image gains as it fades out when the cursor stays
     lingerDelay: 5.0,    // seconds of slowly moving around a spot before it sinks to black
-    lingerFull: 10.0,    // seconds for the area to turn fully black (with flashing light inside)
+    lingerFull: 9.0,     // seconds for the local area to turn fully black (lines inside)
+    lingerGrow: 13.0,    // ...then the black grows to cover the WHOLE screen
+    lingerHold: 14.5,    // full-screen black briefly, then it fades...
+    lingerEnd: 18.0,     // ...all the way out to the beginning, and the cycle resets
   };
 
   class WovenApp {
@@ -332,7 +335,7 @@
      * pool — each flashes on briefly then vanishes, at a wandering spot/angle, and
      * each has its own peak brightness, so the area fills with lines of different
      * intensity appearing and disappearing. Drawn additively ('lighter'). */
-    _drawLightning(cx, cy, R, amt) {
+    _drawLightning(cx, cy, spreadR, lineBase, amt) {
       const ctx = this.ctx, nz = this.noise, t = this.time, TAU = Math.PI * 2;
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
@@ -344,14 +347,14 @@
         const peak = 0.2 + 0.8 * ((k * 0.61803398) % 1); // each line its own brightness
         const al = amt * on * peak;
         if (al < 0.02) continue;
-        // position + angle wander so flashes appear all over the area
+        // position + angle wander so flashes appear all over the (growing) area
         const u = nz.fbm(k * 1.7 + t * 0.6, 5.0, 2);
         const v = nz.fbm(k * 1.7 + 30.0, t * 0.5 + 4.0, 2);
-        const rr = R * 0.74 * Math.sqrt(W.clamp(u, 0, 1));
+        const rr = spreadR * Math.sqrt(W.clamp(u, 0, 1));
         const pang = v * TAU;
         const lx = cx + Math.cos(pang) * rr, ly = cy + Math.sin(pang) * rr;
         const oang = nz.fbm(k * 3.1 + t * 0.7, 12.0, 2) * TAU;
-        const len = R * (0.07 + 0.2 * ((k * 0.3797) % 1));
+        const len = lineBase * (0.5 + 1.7 * ((k * 0.3797) % 1));
         const dx = Math.cos(oang) * len * 0.5, dy = Math.sin(oang) * len * 0.5;
         ctx.strokeStyle = 'rgba(255,252,242,' + al.toFixed(3) + ')';
         ctx.lineWidth = 0.55 + (k % 3) * 0.22;
@@ -394,13 +397,19 @@
       // movement reveals the image normally and lets linger fall away
       const verySlow = p.speed < 4.5;
       if (present && verySlow && (ldx * ldx + ldy * ldy) < nearR * nearR) {
-        this._linger = Math.min(this._linger + dt * 0.001, CONFIG.lingerFull + 2);
+        this._linger = Math.min(this._linger + dt * 0.001, CONFIG.lingerEnd + 1);
         this._lcx += ldx * 0.04; this._lcy += ldy * 0.04; // ease so a tiny drift keeps lingering
       } else {
         this._linger = Math.max(this._linger - dt * 0.001 * 3.0, 0); // reset quickly once moving
         this._lcx = p.x; this._lcy = p.y;
       }
-      const black = W.smoothstep(CONFIG.lingerDelay, CONFIG.lingerFull, this._linger);
+      const li = this._linger;
+      const blackIn = W.smoothstep(CONFIG.lingerDelay, CONFIG.lingerFull, li); // local pool appears
+      const grow = W.smoothstep(CONFIG.lingerFull, CONFIG.lingerGrow, li);     // grows to full screen
+      const fadeOut = W.smoothstep(CONFIG.lingerHold, CONFIG.lingerEnd, li);   // then fades out
+      const black = blackIn * (1 - fadeOut);
+      // once it has fully faded back to the beginning, reset so the cycle can repeat
+      if (li >= CONFIG.lingerEnd) { this._linger = 0; this._lcx = p.x; this._lcy = p.y; }
       // L drives the reveal: 0 until `revealDelay`s of dwell (fiber-play + gather
       // first), then eases 0->1 over `revealDuration`s
       const L = W.smoothstep(CONFIG.revealDelay, CONFIG.revealDelay + CONFIG.revealDuration, this.dwell);
@@ -428,15 +437,25 @@
         this._revealFinal(L, fade, { x: this._ax, y: this._ay, radius: p.radius }, m);
       }
 
-      // 4) linger -> the area sinks to BLACK with flashes of light moving inside it
-      if (black > 0.01 && this._ax !== undefined) {
-        const R = p.radius * 1.04, s = R / this.discMax;
+      // 4) linger -> the area sinks to BLACK with blinking lines inside it; keep
+      //    lingering and the black GROWS to fill the whole screen, recentering on
+      //    the screen, then fades back out to the beginning (see `fadeOut`).
+      if (black > 0.004 && this._ax !== undefined) {
+        const localR = p.radius * 1.04, diag = Math.hypot(this.W, this.H);
+        // as it grows, slide the centre toward the middle of the screen
+        const gcx = this._ax + (this.W * 0.5 - this._ax) * grow;
+        const gcy = this._ay + (this.H * 0.5 - this._ay) * grow;
+        const blackR = localR + (diag * 2.6 - localR) * grow; // huge at full -> solid black screen
+        const s = blackR / this.discMax;
         ctx.globalAlpha = black;
-        ctx.save(); ctx.translate(this._ax, this._ay); ctx.scale(s, s);
-        ctx.drawImage(this.discTex, -this.discTex.width / 2, -this.discTex.height / 2); // soft black disc
+        ctx.save(); ctx.translate(gcx, gcy); ctx.scale(s, s);
+        ctx.drawImage(this.discTex, -this.discTex.width / 2, -this.discTex.height / 2);
         ctx.restore();
         ctx.globalAlpha = 1;
-        this._drawLightning(this._ax, this._ay, R, black);
+        // the blinking lines spread to fill the growing area (line length stays modest)
+        const spreadR = localR + (diag * 0.62 - localR) * grow;
+        const lineBase = Math.min(this.W, this.H) * (0.05 + 0.02 * grow);
+        this._drawLightning(gcx, gcy, spreadR, lineBase, black);
       }
 
       requestAnimationFrame((t) => this._loop(t));
