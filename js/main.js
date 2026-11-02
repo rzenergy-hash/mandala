@@ -179,7 +179,7 @@
       this.dotLight = this._makeDot(cl(bg[0], 24), cl(bg[1], 22), cl(bg[2], 18));
       this.dotDark = this._makeDot(cl(bg[0], -80), cl(bg[1], -74), cl(bg[2], -64));
       const area = this.W * this.H;
-      const n = Math.round(W.clamp(950 * (area / (1280 * 800)), 600, 1700));
+      const n = Math.round(W.clamp(2600 * (area / (1280 * 800)), 1600, 4200));
       const rng = W.mulberry32(this.rngSeed ^ 0x9e37);
       const dx = new Float32Array(n), dy = new Float32Array(n), dr = new Float32Array(n);
       const ph = new Float32Array(n), amp = new Float32Array(n), spd = new Float32Array(n);
@@ -191,7 +191,7 @@
         ph[i] = rng() * Math.PI * 2;
         amp[i] = 8 + rng() * 28;
         spd[i] = 0.06 + rng() * 0.3;
-        tone[i] = rng() < 0.26 ? 1 : 0;
+        tone[i] = rng() < 0.42 ? 1 : 0; // more dark specks ("dots")
         a[i] = tone[i] ? (0.05 + rng() * 0.12) : (0.08 + rng() * 0.22);
       }
       this.dust = { n, dx, dy, dr, ph, amp, spd, a, tone };
