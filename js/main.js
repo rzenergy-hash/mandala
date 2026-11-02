@@ -30,6 +30,8 @@
     zoomAmp: 0.30,       // how much the revealed artwork breathes larger (0.30 = +30%)
     zoomSpeed: 0.24,     // speed of the zoom-in/zoom-out breathing loop (rad/sec) — 50% faster
     holdZoomAmp: 0.55,   // extra scale-up the image gains as it fades out when the cursor stays
+    lingerDelay: 5.0,    // seconds of slowly moving around a spot before it sinks to black
+    lingerFull: 10.0,    // seconds for the area to turn fully black (with flashing light inside)
   };
 
   class WovenApp {
@@ -130,9 +132,11 @@
       this.field = new W.FiberOverlay(this.image, this.W, this.H, this.noise, W.mulberry32(this.rngSeed), count);
       if (!this.interaction) this.interaction = new W.InteractionSystem(this.canvas, this.W, this.H, CONFIG.cursorSize);
       this.dwell = 0; this._ax = undefined; this._ay = undefined;
+      this._linger = 0; this._lcx = undefined; this._lcy = undefined;
       this._makeDisc();
       this._makeNoiseTex();
       this._makeDust();
+      this.lightDot = this._makeDot(255, 244, 214); // warm bright glow for the "lightning"
     }
 
     /* A soft radial disc baked once: SOLID in the middle, then a wide, gentle
@@ -321,6 +325,33 @@
       this.ctx.globalAlpha = 1;
     }
 
+    /* Flashes of light that wander around inside the black pool. Each light's
+     * position is driven by a slow noise field evaluated at the current time, so
+     * the lights DRIFT around the area; a fast per-light flicker makes them flash.
+     * Drawn additively ('lighter') so they glow brightly against the black. */
+    _drawLightning(cx, cy, R, amt) {
+      const ctx = this.ctx, nz = this.noise, t = this.time, dot = this.lightDot;
+      if (!dot) return;
+      ctx.globalCompositeOperation = 'lighter';
+      const N = 11;
+      for (let k = 0; k < N; k++) {
+        const u = nz.fbm(k * 2.7 + t * 0.6, 3.1, 2);          // wander radius
+        const v = nz.fbm(k * 2.7 + 40.0, t * 0.55 + 9.0, 2);  // wander angle
+        const rr = R * 0.82 * Math.sqrt(W.clamp(u, 0, 1));
+        const ang = v * Math.PI * 2 + t * 0.25;
+        const lx = cx + Math.cos(ang) * rr, ly = cy + Math.sin(ang) * rr;
+        const fl = Math.sin(t * (4.5 + k * 0.8) + k * 2.1);
+        const flash = fl > 0 ? fl * fl : 0; // sharp, sparse flashes
+        const al = amt * flash * 0.9;
+        if (al < 0.02) continue;
+        const sz = R * (0.11 + 0.09 * (0.5 + 0.5 * Math.sin(t * 2.3 + k)));
+        ctx.globalAlpha = al;
+        ctx.drawImage(dot, lx - sz, ly - sz, sz * 2, sz * 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
     _loop(now) {
       const dt = Math.min(now - this.last, 50);
       this.last = now;
@@ -342,6 +373,22 @@
       } else {
         this.dwell = Math.max(this.dwell - dt * 0.001 * 1.4, 0); // leaving -> gentle rewind
       }
+
+      // --- linger: SLOWLY moving the cursor around one spot (energy stays up, but
+      //     you don't travel to a new area) builds "linger". Past `lingerDelay` the
+      //     area stops resolving to the pale picture and instead sinks to BLACK with
+      //     flashes of light wandering inside it. A fast move to a new spot resets it.
+      if (this._lcx === undefined) { this._lcx = p.x; this._lcy = p.y; this._linger = 0; }
+      const ldx = p.x - this._lcx, ldy = p.y - this._lcy;
+      const nearR = p.radius * 0.7;
+      if (present && (ldx * ldx + ldy * ldy) < nearR * nearR) {
+        this._linger = Math.min(this._linger + dt * 0.001, CONFIG.lingerFull + 2);
+        this._lcx += ldx * 0.02; this._lcy += ldy * 0.02; // ease, so slow drift keeps lingering
+      } else {
+        this._linger = Math.max(this._linger - dt * 0.001 * 2.0, 0); // reset faster on a jump/leave
+        this._lcx = p.x; this._lcy = p.y;
+      }
+      const black = W.smoothstep(CONFIG.lingerDelay, CONFIG.lingerFull, this._linger);
       // L drives the reveal: 0 until `revealDelay`s of dwell (fiber-play + gather
       // first), then eases 0->1 over `revealDuration`s
       const L = W.smoothstep(CONFIG.revealDelay, CONFIG.revealDelay + CONFIG.revealDuration, this.dwell);
@@ -367,6 +414,17 @@
       //    appear to weave themselves INTO the picture (not a flat opacity fade).
       if (L > 0.01 && fade > 0.01 && this._ax !== undefined) {
         this._revealFinal(L, fade, { x: this._ax, y: this._ay, radius: p.radius }, m);
+      }
+
+      // 4) linger -> the area sinks to BLACK with flashes of light moving inside it
+      if (black > 0.01 && this._ax !== undefined) {
+        const R = p.radius * 1.04, s = R / this.discMax;
+        ctx.globalAlpha = black;
+        ctx.save(); ctx.translate(this._ax, this._ay); ctx.scale(s, s);
+        ctx.drawImage(this.discTex, -this.discTex.width / 2, -this.discTex.height / 2); // soft black disc
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        this._drawLightning(this._ax, this._ay, R, black);
       }
 
       requestAnimationFrame((t) => this._loop(t));
