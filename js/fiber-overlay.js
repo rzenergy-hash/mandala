@@ -18,7 +18,7 @@
   const EASE_UP = 0.10, EASE_DOWN = 0.045; // gather on hover; fly away when the cursor stops
   const BANDS = 6;
   const BAND_ALPHA = [0.10, 0.18, 0.30, 0.46, 0.62, 0.74];
-  const WIDTHS = [0.6, 1.0, 0.4]; // hair-fine threads; index 2 = extra-thin filaments
+  const WIDTHS = [0.42, 0.68, 0.26]; // even skinnier threads; index 2 = extra-thin filaments
 
   W.FiberOverlay = class FiberOverlay {
     constructor(img, cw, ch, noise, rng, count) {
