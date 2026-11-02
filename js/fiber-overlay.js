@@ -137,9 +137,9 @@
         // medium threads, and some long strands. Threads are mostly STRAIGHT now:
         // only the longest get a very slight bow, and ~3% are long, extra-thin,
         // dead-straight FILAMENTS that streak across the field.
-        const isFilament = rng() < 0.03;
-        const isLong = rng() < 0.34;
-        const isVeryLong = isLong && rng() < 0.42;
+        const isFilament = rng() < 0.055;
+        const isLong = rng() < 0.44;
+        const isVeryLong = isLong && rng() < 0.48;
         const lf = isFilament ? (22 + rng() * 26)
           : isVeryLong ? (10 + rng() * 16)
           : isLong ? (3.0 + rng() * 5.0)

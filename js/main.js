@@ -26,7 +26,7 @@
     imageDisc: 0.62,     // crisp-image disc as a fraction of the gather field (smaller = tighter)
     revealDelay: 1.6,    // seconds of hovering before the image starts to appear
     revealDuration: 3.0, // seconds for the image to fully dissolve in
-    imageRotate: 0.03,   // radians/sec the revealed artwork slowly turns (0 = still)
+    imageRotate: 0.05,   // radians/sec the revealed artwork slowly turns (0 = still)
   };
 
   class WovenApp {
@@ -179,7 +179,7 @@
       this.dotLight = this._makeDot(cl(bg[0], 24), cl(bg[1], 22), cl(bg[2], 18));
       this.dotDark = this._makeDot(cl(bg[0], -80), cl(bg[1], -74), cl(bg[2], -64));
       const area = this.W * this.H;
-      const n = Math.round(W.clamp(650 * (area / (1280 * 800)), 400, 1200));
+      const n = Math.round(W.clamp(950 * (area / (1280 * 800)), 600, 1700));
       const rng = W.mulberry32(this.rngSeed ^ 0x9e37);
       const dx = new Float32Array(n), dy = new Float32Array(n), dr = new Float32Array(n);
       const ph = new Float32Array(n), amp = new Float32Array(n), spd = new Float32Array(n);
