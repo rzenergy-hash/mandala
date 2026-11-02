@@ -316,12 +316,19 @@
       // --- sparkle pass: a scattered few fibers FLASH LIGHT as they gather. The
       //     strokes are near-white, so they vanish on the white paper and only
       //     glint where fibers have gathered into the darkened cloud — reading as
-      //     little sparks of light weaving the image into being. Batched into a
-      //     handful of alpha levels so the whole pass is a few stroke() calls.
+      //     little sparks of light weaving the image into being.
+      //     The flash is driven by a LOW-FREQUENCY NOISE FIELD that drifts and
+      //     morphs over time, so bright patches form as CLUSTERS that start at a
+      //     spot, pull in their neighbours, and travel elsewhere (not a flat,
+      //     even twinkle). A fast per-fibre shimmer keeps each cluster alive.
+      //     Batched into a handful of alpha levels so the pass is a few stroke()s.
       const sp = this.spark;
       if (sp) {
-        const wv = this.weave, ph = this.phase, tm = this._time || 0;
-        const LV = 6, maxA = 0.8;
+        const wv = this.weave, ph = this.phase, tm = this._time || 0, nz = this.noise;
+        const cxp = this.cx, cyp = this.cy;
+        const LV = 6, maxA = 0.95;
+        // the travelling/morphing offset into the noise field
+        const ox = tm * 0.34, oy = -tm * 0.21 + Math.sin(tm * 0.23) * 1.6;
         let spk = this._spk;
         if (!spk) { spk = this._spk = []; for (let l = 0; l < LV; l++) spk.push([]); }
         for (let l = 0; l < LV; l++) spk[l].length = 0;
@@ -329,9 +336,13 @@
           if (!sp[i]) continue;
           const g = W.smoothstep(0.22, 0.7, wv[i]); // only while gathering/gathered
           if (g < 0.02) continue;
-          const spd = 5 + ph[i] * 1.3;
-          const tw = 0.5 + 0.5 * Math.sin(tm * spd + ph[i] * 3.1);
-          const al = g * tw * tw; // squared -> crisper, brighter flashes
+          // where the travelling bright clusters are right now
+          const field = nz.fbm(cxp[i] * 0.007 + ox, cyp[i] * 0.007 + oy, 3);
+          const cluster = W.smoothstep(0.6, 0.85, field); // sparse peaks only
+          if (cluster < 0.02) continue;
+          // fast per-fibre shimmer so a bright cluster isn't a flat patch
+          const sh = 0.4 + 0.6 * Math.sin(tm * (8 + ph[i] * 3) + ph[i] * 6.0);
+          const al = g * cluster * sh * sh;
           if (al < 0.05) continue;
           let lvl = (al * LV) | 0; if (lvl >= LV) lvl = LV - 1;
           spk[lvl].push(i);
