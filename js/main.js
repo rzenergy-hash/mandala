@@ -331,50 +331,6 @@
       this.ctx.globalAlpha = 1;
     }
 
-    /* MANY thin LINES at VARIED brightness, blinking in and out inside the black
-     * pool — each flashes on briefly then vanishes, at a wandering spot/angle, and
-     * each has its own peak brightness, so the area fills with lines of different
-     * intensity appearing and disappearing. Drawn additively ('lighter'). */
-    _drawLightning(cx, cy, spreadR, lineBase, amt) {
-      const ctx = this.ctx, nz = this.noise, t = this.time, TAU = Math.PI * 2;
-      const N = 600, LV = 9; // MANY lines, concentrated around the pool's edge
-      // reuse per-level coordinate buffers so each level is one beginPath/stroke
-      let bk = this._lnB;
-      if (!bk) { bk = this._lnB = []; for (let l = 0; l < LV; l++) bk.push({ a: new Float32Array(N * 4), n: 0 }); }
-      for (let l = 0; l < LV; l++) bk[l].n = 0;
-      for (let k = 0; k < N; k++) {
-        // VERY fast flicker, varied per line -> they flash in and out rapidly
-        const fl = Math.sin(t * (14.0 + (k % 11) * 2.3) + k * 2.399);
-        const on = fl > 0 ? Math.pow(fl, 2.6) : 0;
-        const peak = 0.18 + 0.82 * ((k * 0.61803398) % 1); // each line its own brightness
-        const al = amt * on * peak;
-        if (al < 0.03) continue;
-        const u = nz.fbm(k * 1.7 + t * 0.9, 5.0, 2);
-        const rr = spreadR * (0.72 + 0.28 * W.clamp(u, 0, 1)); // ring the EDGE, not the centre
-        // spread evenly around the whole ring (k/N) plus a per-line wander, so the
-        // lines encircle the pool rather than clustering on one side
-        const pang = (k / N) * TAU + nz.fbm(k * 1.7 + 30.0, t * 0.5 + 4.0, 2) * 2.2;
-        const lx = cx + Math.cos(pang) * rr, ly = cy + Math.sin(pang) * rr;
-        const oang = nz.fbm(k * 3.1 + t * 0.9, 12.0, 2) * TAU;
-        const len = lineBase * (0.5 + 1.5 * ((k * 0.3797) % 1));
-        const dx = Math.cos(oang) * len * 0.5, dy = Math.sin(oang) * len * 0.5;
-        let lvl = (al * LV) | 0; if (lvl >= LV) lvl = LV - 1;
-        const b = bk[lvl], o = b.n * 4;
-        b.a[o] = lx - dx; b.a[o + 1] = ly - dy; b.a[o + 2] = lx + dx; b.a[o + 3] = ly + dy; b.n++;
-      }
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      ctx.lineWidth = 0.7;
-      for (let l = 0; l < LV; l++) {
-        const b = bk[l]; if (b.n === 0) continue;
-        ctx.strokeStyle = 'rgba(255,252,242,' + ((l + 0.5) / LV).toFixed(3) + ')';
-        ctx.beginPath();
-        for (let i = 0; i < b.n; i++) { const o = i * 4; ctx.moveTo(b.a[o], b.a[o + 1]); ctx.lineTo(b.a[o + 2], b.a[o + 3]); }
-        ctx.stroke();
-      }
-      ctx.globalCompositeOperation = 'source-over';
-    }
-
     _loop(now) {
       const dt = Math.min(now - this.last, 50);
       this.last = now;
@@ -452,21 +408,18 @@
       //    lingering and the black GROWS to fill the whole screen, recentering on
       //    the screen, then fades back out to the beginning (see `fadeOut`).
       if (black > 0.004 && this._ax !== undefined) {
-        const localR = p.radius * 1.04, diag = Math.hypot(this.W, this.H);
+        const localR = p.radius * 1.04, minWH = Math.min(this.W, this.H);
         // as it grows, slide the centre toward the middle of the screen
         const gcx = this._ax + (this.W * 0.5 - this._ax) * grow;
         const gcy = this._ay + (this.H * 0.5 - this._ay) * grow;
-        const blackR = localR + (diag * 0.85 - localR) * grow; // grows BIG (not full-screen black)
+        // grows to a moderate pool that stays INSIDE the screen edges, then fades out
+        const blackR = localR + (minWH * 0.45 - localR) * grow;
         const s = blackR / this.discMax;
         ctx.globalAlpha = black;
         ctx.save(); ctx.translate(gcx, gcy); ctx.scale(s, s);
         ctx.drawImage(this.discTex, -this.discTex.width / 2, -this.discTex.height / 2);
         ctx.restore();
         ctx.globalAlpha = 1;
-        // the blinking lines ring the growing pool's EDGE (line length stays modest)
-        const spreadR = localR + (diag * 0.5 - localR) * grow;
-        const lineBase = Math.min(this.W, this.H) * (0.05 + 0.02 * grow);
-        this._drawLightning(gcx, gcy, spreadR, lineBase, black);
       }
 
       requestAnimationFrame((t) => this._loop(t));
