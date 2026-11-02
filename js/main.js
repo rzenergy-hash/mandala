@@ -328,32 +328,33 @@
       this.ctx.globalAlpha = 1;
     }
 
-    /* A few thin bright LINES that blink in and out fast inside the black pool —
-     * each flashes on briefly then vanishes, appearing at a wandering spot/angle,
-     * so the black area has sparse lines appearing and disappearing. Drawn
-     * additively ('lighter') so they read as light against the black. */
+    /* MANY thin LINES at VARIED brightness, blinking in and out inside the black
+     * pool — each flashes on briefly then vanishes, at a wandering spot/angle, and
+     * each has its own peak brightness, so the area fills with lines of different
+     * intensity appearing and disappearing. Drawn additively ('lighter'). */
     _drawLightning(cx, cy, R, amt) {
       const ctx = this.ctx, nz = this.noise, t = this.time, TAU = Math.PI * 2;
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
-      const N = 6;
+      const N = 90;
       for (let k = 0; k < N; k++) {
-        // sharp, fast on/off: mostly dark with a brief bright flash
-        const fl = Math.sin(t * (6.0 + k * 1.7) + k * 3.1);
-        const on = fl > 0 ? Math.pow(fl, 7) : 0; // brief spike -> appears & vanishes fast
-        const al = amt * on;
-        if (al < 0.03) continue;
-        // position + angle wander so each flash shows up somewhere new
-        const u = nz.fbm(k * 3.3 + t * 0.8, 5.0, 2);
-        const v = nz.fbm(k * 3.3 + 30.0, t * 0.7 + 4.0, 2);
-        const rr = R * 0.68 * Math.sqrt(W.clamp(u, 0, 1));
+        // per-line flicker (varied rates) with a soft spike -> a spread of on-states
+        const fl = Math.sin(t * (3.2 + (k % 9) * 0.9) + k * 2.399);
+        const on = fl > 0 ? Math.pow(fl, 3.2) : 0;
+        const peak = 0.2 + 0.8 * ((k * 0.61803398) % 1); // each line its own brightness
+        const al = amt * on * peak;
+        if (al < 0.02) continue;
+        // position + angle wander so flashes appear all over the area
+        const u = nz.fbm(k * 1.7 + t * 0.6, 5.0, 2);
+        const v = nz.fbm(k * 1.7 + 30.0, t * 0.5 + 4.0, 2);
+        const rr = R * 0.74 * Math.sqrt(W.clamp(u, 0, 1));
         const pang = v * TAU;
         const lx = cx + Math.cos(pang) * rr, ly = cy + Math.sin(pang) * rr;
-        const oang = nz.fbm(k * 4.9 + t * 0.9, 12.0, 2) * TAU;
-        const len = R * (0.14 + 0.16 * W.clamp(nz.fbm(k * 1.7 + 1.0, t * 0.6, 2), 0, 1));
+        const oang = nz.fbm(k * 3.1 + t * 0.7, 12.0, 2) * TAU;
+        const len = R * (0.07 + 0.2 * ((k * 0.3797) % 1));
         const dx = Math.cos(oang) * len * 0.5, dy = Math.sin(oang) * len * 0.5;
         ctx.strokeStyle = 'rgba(255,252,242,' + al.toFixed(3) + ')';
-        ctx.lineWidth = 0.7 + (k % 3) * 0.3;
+        ctx.lineWidth = 0.55 + (k % 3) * 0.22;
         ctx.beginPath(); ctx.moveTo(lx - dx, ly - dy); ctx.lineTo(lx + dx, ly + dy); ctx.stroke();
       }
       ctx.globalAlpha = 1;
