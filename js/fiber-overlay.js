@@ -64,6 +64,7 @@
       const curveMag = new Float32Array(N); // perpendicular bow for long curved threads
       const skinny = new Uint8Array(N);     // 1 = a long extra-thin filament
       const thick = new Uint8Array(N);      // 1 = a long line drawn a bit heavier
+      const spark = new Uint8Array(N);      // 1 = a fiber that flashes light while gathering
       const depth = new Float32Array(N);    // 0 = far/back (small, hazy), 1 = near/front
       const dlevel = new Int8Array(N);      // coarse back/mid/front band for draw order
       const cr = new Uint8Array(N), cg = new Uint8Array(N), cb = new Uint8Array(N);
@@ -152,6 +153,7 @@
         // give ~40% of the long lines a slightly heavier stroke (short lines stay
         // skinny); this wins over the skinny class so some long streaks read bolder
         thick[n] = ((isVeryLong || isFilament) && rng() < 0.4) ? 1 : 0;
+        spark[n] = rng() < 0.03 ? 1 : 0; // ~3% flash light as they gather
         phase[n] = rng() * Math.PI * 2;
         n++;
       }
@@ -159,7 +161,7 @@
       this.hx = hx; this.hy = hy; this.lx = lx; this.ly = ly;
       this.cosH = cosH; this.sinH = sinH; this.cosL = cosL; this.sinL = sinL;
       this.len = len; this.phase = phase; this.cr = cr; this.cg = cg; this.cb = cb;
-      this.curveMag = curveMag; this.depth = depth; this.dlevel = dlevel; this.skinny = skinny; this.thick = thick;
+      this.curveMag = curveMag; this.depth = depth; this.dlevel = dlevel; this.skinny = skinny; this.thick = thick; this.spark = spark;
 
       // dynamic state
       this.cx = new Float32Array(n); this.cy = new Float32Array(n);
@@ -176,6 +178,7 @@
     }
 
     update(dt, time, pointer) {
+      this._time = time;
       const dtn = W.clamp(dt / 16.667, 0.4, 2.2);
       const N = this.N;
       const hx = this.hx, hy = this.hy, lx = this.lx, ly = this.ly;
@@ -291,6 +294,42 @@
             } else {
               ctx.lineTo(bx, by);
             }
+          }
+          ctx.stroke();
+        }
+      }
+
+      // --- sparkle pass: a scattered few fibers FLASH LIGHT as they gather. The
+      //     strokes are near-white, so they vanish on the white paper and only
+      //     glint where fibers have gathered into the darkened cloud — reading as
+      //     little sparks of light weaving the image into being. Batched into a
+      //     handful of alpha levels so the whole pass is a few stroke() calls.
+      const sp = this.spark;
+      if (sp) {
+        const wv = this.weave, ph = this.phase, tm = this._time || 0;
+        const LV = 6, maxA = 0.8;
+        let spk = this._spk;
+        if (!spk) { spk = this._spk = []; for (let l = 0; l < LV; l++) spk.push([]); }
+        for (let l = 0; l < LV; l++) spk[l].length = 0;
+        for (let i = 0; i < N; i++) {
+          if (!sp[i]) continue;
+          const g = W.smoothstep(0.22, 0.7, wv[i]); // only while gathering/gathered
+          if (g < 0.02) continue;
+          const spd = 5 + ph[i] * 1.3;
+          const tw = 0.5 + 0.5 * Math.sin(tm * spd + ph[i] * 3.1);
+          const al = g * tw * tw; // squared -> crisper, brighter flashes
+          if (al < 0.05) continue;
+          let lvl = (al * LV) | 0; if (lvl >= LV) lvl = LV - 1;
+          spk[lvl].push(i);
+        }
+        for (let l = 0; l < LV; l++) {
+          const arr = spk[l]; if (arr.length === 0) continue;
+          ctx.strokeStyle = 'rgba(255,251,240,' + (((l + 0.5) / LV) * maxA).toFixed(3) + ')';
+          ctx.lineWidth = 1.0;
+          ctx.beginPath();
+          for (let k = 0; k < arr.length; k++) {
+            const i = arr[k];
+            ctx.moveTo(ex0[i], ey0[i]); ctx.lineTo(ex1[i], ey1[i]);
           }
           ctx.stroke();
         }
