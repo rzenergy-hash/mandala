@@ -28,7 +28,8 @@
     revealDuration: 3.0, // seconds for the image to fully dissolve in
     imageRotate: 0.08,   // radians/sec the revealed artwork slowly turns (0 = still)
     zoomAmp: 0.30,       // how much the revealed artwork breathes larger (0.30 = +30%)
-    zoomSpeed: 0.16,     // speed of the zoom-in/zoom-out breathing loop (rad/sec)
+    zoomSpeed: 0.24,     // speed of the zoom-in/zoom-out breathing loop (rad/sec) — 50% faster
+    holdZoomAmp: 0.55,   // extra scale-up the image gains as it fades out when the cursor stays
   };
 
   class WovenApp {
@@ -277,7 +278,11 @@
       // breathing zoom: scale eases 1 -> 1+zoomAmp -> 1 forever. The cosine makes
       // both ends (fully out / fully in) ease to a stop, so the loop point and the
       // return to original size are perfectly smooth with no jump.
-      const zoom = 1 + CONFIG.zoomAmp * (0.5 - 0.5 * Math.cos(this.time * CONFIG.zoomSpeed));
+      // breathing zoom, PLUS an extra scale-up that grows as the reveal fades
+      // (travel drops toward 0 when the cursor stays on a spot), so a held image
+      // zooms in while it dissolves away rather than just fading in place
+      const fadeZoom = 1 + (1 - travel) * CONFIG.holdZoomAmp;
+      const zoom = (1 + CONFIG.zoomAmp * (0.5 - 0.5 * Math.cos(this.time * CONFIG.zoomSpeed))) * fadeZoom;
       tc.setTransform(dpr, 0, 0, dpr, 0, 0);
       tc.clearRect(0, 0, this.W, this.H);
       tc.globalCompositeOperation = 'source-over';
