@@ -337,30 +337,41 @@
      * intensity appearing and disappearing. Drawn additively ('lighter'). */
     _drawLightning(cx, cy, spreadR, lineBase, amt) {
       const ctx = this.ctx, nz = this.noise, t = this.time, TAU = Math.PI * 2;
+      const N = 600, LV = 9; // MANY lines, concentrated around the pool's edge
+      // reuse per-level coordinate buffers so each level is one beginPath/stroke
+      let bk = this._lnB;
+      if (!bk) { bk = this._lnB = []; for (let l = 0; l < LV; l++) bk.push({ a: new Float32Array(N * 4), n: 0 }); }
+      for (let l = 0; l < LV; l++) bk[l].n = 0;
+      for (let k = 0; k < N; k++) {
+        // VERY fast flicker, varied per line -> they flash in and out rapidly
+        const fl = Math.sin(t * (14.0 + (k % 11) * 2.3) + k * 2.399);
+        const on = fl > 0 ? Math.pow(fl, 2.6) : 0;
+        const peak = 0.18 + 0.82 * ((k * 0.61803398) % 1); // each line its own brightness
+        const al = amt * on * peak;
+        if (al < 0.03) continue;
+        const u = nz.fbm(k * 1.7 + t * 0.9, 5.0, 2);
+        const rr = spreadR * (0.72 + 0.28 * W.clamp(u, 0, 1)); // ring the EDGE, not the centre
+        // spread evenly around the whole ring (k/N) plus a per-line wander, so the
+        // lines encircle the pool rather than clustering on one side
+        const pang = (k / N) * TAU + nz.fbm(k * 1.7 + 30.0, t * 0.5 + 4.0, 2) * 2.2;
+        const lx = cx + Math.cos(pang) * rr, ly = cy + Math.sin(pang) * rr;
+        const oang = nz.fbm(k * 3.1 + t * 0.9, 12.0, 2) * TAU;
+        const len = lineBase * (0.5 + 1.5 * ((k * 0.3797) % 1));
+        const dx = Math.cos(oang) * len * 0.5, dy = Math.sin(oang) * len * 0.5;
+        let lvl = (al * LV) | 0; if (lvl >= LV) lvl = LV - 1;
+        const b = bk[lvl], o = b.n * 4;
+        b.a[o] = lx - dx; b.a[o + 1] = ly - dy; b.a[o + 2] = lx + dx; b.a[o + 3] = ly + dy; b.n++;
+      }
       ctx.globalCompositeOperation = 'lighter';
       ctx.lineCap = 'round';
-      const N = 90;
-      for (let k = 0; k < N; k++) {
-        // per-line flicker (varied rates) with a soft spike -> a spread of on-states
-        const fl = Math.sin(t * (3.2 + (k % 9) * 0.9) + k * 2.399);
-        const on = fl > 0 ? Math.pow(fl, 3.2) : 0;
-        const peak = 0.2 + 0.8 * ((k * 0.61803398) % 1); // each line its own brightness
-        const al = amt * on * peak;
-        if (al < 0.02) continue;
-        // position + angle wander so flashes appear all over the (growing) area
-        const u = nz.fbm(k * 1.7 + t * 0.6, 5.0, 2);
-        const v = nz.fbm(k * 1.7 + 30.0, t * 0.5 + 4.0, 2);
-        const rr = spreadR * Math.sqrt(W.clamp(u, 0, 1));
-        const pang = v * TAU;
-        const lx = cx + Math.cos(pang) * rr, ly = cy + Math.sin(pang) * rr;
-        const oang = nz.fbm(k * 3.1 + t * 0.7, 12.0, 2) * TAU;
-        const len = lineBase * (0.5 + 1.7 * ((k * 0.3797) % 1));
-        const dx = Math.cos(oang) * len * 0.5, dy = Math.sin(oang) * len * 0.5;
-        ctx.strokeStyle = 'rgba(255,252,242,' + al.toFixed(3) + ')';
-        ctx.lineWidth = 0.55 + (k % 3) * 0.22;
-        ctx.beginPath(); ctx.moveTo(lx - dx, ly - dy); ctx.lineTo(lx + dx, ly + dy); ctx.stroke();
+      ctx.lineWidth = 0.7;
+      for (let l = 0; l < LV; l++) {
+        const b = bk[l]; if (b.n === 0) continue;
+        ctx.strokeStyle = 'rgba(255,252,242,' + ((l + 0.5) / LV).toFixed(3) + ')';
+        ctx.beginPath();
+        for (let i = 0; i < b.n; i++) { const o = i * 4; ctx.moveTo(b.a[o], b.a[o + 1]); ctx.lineTo(b.a[o + 2], b.a[o + 3]); }
+        ctx.stroke();
       }
-      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
 
@@ -445,15 +456,15 @@
         // as it grows, slide the centre toward the middle of the screen
         const gcx = this._ax + (this.W * 0.5 - this._ax) * grow;
         const gcy = this._ay + (this.H * 0.5 - this._ay) * grow;
-        const blackR = localR + (diag * 2.6 - localR) * grow; // huge at full -> solid black screen
+        const blackR = localR + (diag * 0.85 - localR) * grow; // grows BIG (not full-screen black)
         const s = blackR / this.discMax;
         ctx.globalAlpha = black;
         ctx.save(); ctx.translate(gcx, gcy); ctx.scale(s, s);
         ctx.drawImage(this.discTex, -this.discTex.width / 2, -this.discTex.height / 2);
         ctx.restore();
         ctx.globalAlpha = 1;
-        // the blinking lines spread to fill the growing area (line length stays modest)
-        const spreadR = localR + (diag * 0.62 - localR) * grow;
+        // the blinking lines ring the growing pool's EDGE (line length stays modest)
+        const spreadR = localR + (diag * 0.5 - localR) * grow;
         const lineBase = Math.min(this.W, this.H) * (0.05 + 0.02 * grow);
         this._drawLightning(gcx, gcy, spreadR, lineBase, black);
       }
