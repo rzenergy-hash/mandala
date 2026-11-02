@@ -136,6 +136,7 @@
       this._makeDisc();
       this._makeNoiseTex();
       this._makeDust();
+      this.lightDot = this._makeDot(255, 244, 214); // warm bright glow for the "lightning"
     }
 
     /* A soft radial disc baked once: SOLID in the middle, then a wide, gentle
@@ -328,39 +329,28 @@
       this.ctx.globalAlpha = 1;
     }
 
-    /* Flashes of light that wander around inside the black pool — drawn as bright
-     * LINE streaks (not round glows). Each streak's position and angle are driven
-     * by a slow noise field evaluated at the current time, so they DRIFT around the
-     * area and re-aim; a fast per-streak flicker makes them flash on and off. A
-     * soft wide underlay plus a thin bright core gives each a glowing-filament look.
-     * Drawn additively ('lighter') so they blaze against the black. */
+    /* Flashes of light that wander around inside the black pool. Each light's
+     * position is driven by a noise field evaluated at the current time, so the
+     * lights DRIFT around the area; a per-light flicker makes them flash. Small
+     * and quick. Drawn additively ('lighter') so they glow against the black. */
     _drawLightning(cx, cy, R, amt) {
-      const ctx = this.ctx, nz = this.noise, t = this.time, TAU = Math.PI * 2;
+      const ctx = this.ctx, nz = this.noise, t = this.time, dot = this.lightDot;
+      if (!dot) return;
       ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
-      const N = 12;
+      const N = 18;
       for (let k = 0; k < N; k++) {
-        const u = nz.fbm(k * 2.7 + t * 0.6, 3.1, 2);          // wander radius
-        const v = nz.fbm(k * 2.7 + 40.0, t * 0.55 + 9.0, 2);  // wander angle
-        const rr = R * 0.8 * Math.sqrt(W.clamp(u, 0, 1));
-        const pang = v * TAU + t * 0.25;
-        const lx = cx + Math.cos(pang) * rr, ly = cy + Math.sin(pang) * rr;
-        const fl = Math.sin(t * (4.5 + k * 0.8) + k * 2.1);
+        const u = nz.fbm(k * 2.7 + t * 1.4, 3.1, 2);          // wander radius (faster)
+        const v = nz.fbm(k * 2.7 + 40.0, t * 1.3 + 9.0, 2);   // wander angle (faster)
+        const rr = R * 0.82 * Math.sqrt(W.clamp(u, 0, 1));
+        const ang = v * Math.PI * 2 + t * 0.6;
+        const lx = cx + Math.cos(ang) * rr, ly = cy + Math.sin(ang) * rr;
+        const fl = Math.sin(t * (8.5 + k * 1.1) + k * 2.1);   // faster flicker
         const flash = fl > 0 ? fl * fl : 0; // sharp, sparse flashes
-        const al = amt * flash;
+        const al = amt * flash * 0.95;
         if (al < 0.02) continue;
-        // the streak's own direction drifts over time
-        const oang = nz.fbm(k * 5.1 + t * 0.9, 17.0, 2) * TAU;
-        const len = R * (0.2 + 0.3 * W.clamp(nz.fbm(k * 1.3 + 2.0, t * 0.7, 2), 0, 1));
-        const dx = Math.cos(oang) * len * 0.5, dy = Math.sin(oang) * len * 0.5;
-        // soft glow underlay
-        ctx.strokeStyle = 'rgba(255,240,205,' + (al * 0.3).toFixed(3) + ')';
-        ctx.lineWidth = 3.0;
-        ctx.beginPath(); ctx.moveTo(lx - dx, ly - dy); ctx.lineTo(lx + dx, ly + dy); ctx.stroke();
-        // thin bright core
-        ctx.strokeStyle = 'rgba(255,253,244,' + al.toFixed(3) + ')';
-        ctx.lineWidth = 0.9;
-        ctx.beginPath(); ctx.moveTo(lx - dx, ly - dy); ctx.lineTo(lx + dx, ly + dy); ctx.stroke();
+        const sz = R * (0.045 + 0.035 * (0.5 + 0.5 * Math.sin(t * 4.0 + k))); // smaller
+        ctx.globalAlpha = al;
+        ctx.drawImage(dot, lx - sz, ly - sz, sz * 2, sz * 2);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
