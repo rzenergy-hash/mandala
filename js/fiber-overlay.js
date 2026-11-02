@@ -194,11 +194,21 @@
 
       let sum = 0;
       for (let i = 0; i < N; i++) {
-        let target = 0;
+        let target = 0, gHl = 0, gActive = 0;
         if (active) {
           const dx = hx[i] - px, dy = hy[i] - py;
           const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < pr) { const t = 1 - d / pr; target = pe * (t * t * (3 - 2 * t)); }
+          if (d < pr) {
+            const t = 1 - d / pr; target = pe * (t * t * (3 - 2 * t));
+            // while gathering, a fiber takes a length set by WHERE it is in the
+            // field: longer lines toward the CENTRE, short stitches out at the
+            // ring — so the edge of the forming image is short and the centre
+            // stretches into longer lines (independent of its resting length, so
+            // no runaway spikes from the long resting threads)
+            const tt = d / pr; // 0 centre -> 1 edge
+            gHl = pr * (0.2 + (0.012 - 0.2) * tt) * (0.7 + depth[i] * 0.6);
+            gActive = 1;
+          }
         }
         const cur = weave[i];
         const ease = target > cur ? EASE_UP : EASE_DOWN;
@@ -238,7 +248,11 @@
         let c = cosL[i] + (cosH[i] - cosL[i]) * ew;
         let s = sinL[i] + (sinH[i] - sinL[i]) * ew;
         const inv = 1 / (Math.hypot(c, s) || 1); c *= inv; s *= inv;
-        const hl = len[i] * 0.5;
+        // blend from the resting length toward the position-based gathered length
+        // as the fiber weaves in (ew), so at rest lengths are unchanged and the
+        // short-ring / long-centre shaping only appears while gathering
+        const base = len[i] * 0.5;
+        const hl = gActive ? base * (1 - ew) + gHl * ew : base;
         ex0[i] = ncx - c * hl; ey0[i] = ncy - s * hl;
         ex1[i] = ncx + c * hl; ey1[i] = ncy + s * hl;
       }
