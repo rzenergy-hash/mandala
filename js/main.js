@@ -22,7 +22,7 @@
   const CONFIG = {
     image: window.WOVEN_IMAGE || 'assets/artwork.jpg', // the artwork (swap this file; png/jpg both fine)
     fiberCount: 165000,  // density of the loose fiber field (auto-scaled to the viewport)
-    cursorSize: 0.30,    // gather-field radius as a fraction of the smaller viewport side
+    cursorSize: 0.22,    // gather-field radius as a fraction of the smaller viewport side
     imageDisc: 0.62,     // crisp-image disc as a fraction of the gather field (smaller = tighter)
     revealDelay: 1.6,    // seconds of hovering before the image starts to appear
     revealDuration: 3.0, // seconds for the image to fully dissolve in
@@ -136,7 +136,6 @@
       this._makeDisc();
       this._makeNoiseTex();
       this._makeDust();
-      this.lightDot = this._makeDot(255, 244, 214); // warm bright glow for the "lightning"
     }
 
     /* A soft radial disc baked once: SOLID in the middle, then a wide, gentle
@@ -329,28 +328,33 @@
       this.ctx.globalAlpha = 1;
     }
 
-    /* Flashes of light that wander around inside the black pool. Each light's
-     * position is driven by a noise field evaluated at the current time, so the
-     * lights DRIFT around the area; a per-light flicker makes them flash. Small
-     * and quick. Drawn additively ('lighter') so they glow against the black. */
+    /* A few thin bright LINES that blink in and out fast inside the black pool —
+     * each flashes on briefly then vanishes, appearing at a wandering spot/angle,
+     * so the black area has sparse lines appearing and disappearing. Drawn
+     * additively ('lighter') so they read as light against the black. */
     _drawLightning(cx, cy, R, amt) {
-      const ctx = this.ctx, nz = this.noise, t = this.time, dot = this.lightDot;
-      if (!dot) return;
+      const ctx = this.ctx, nz = this.noise, t = this.time, TAU = Math.PI * 2;
       ctx.globalCompositeOperation = 'lighter';
-      const N = 18;
+      ctx.lineCap = 'round';
+      const N = 6;
       for (let k = 0; k < N; k++) {
-        const u = nz.fbm(k * 2.7 + t * 1.4, 3.1, 2);          // wander radius (faster)
-        const v = nz.fbm(k * 2.7 + 40.0, t * 1.3 + 9.0, 2);   // wander angle (faster)
-        const rr = R * 0.82 * Math.sqrt(W.clamp(u, 0, 1));
-        const ang = v * Math.PI * 2 + t * 0.6;
-        const lx = cx + Math.cos(ang) * rr, ly = cy + Math.sin(ang) * rr;
-        const fl = Math.sin(t * (8.5 + k * 1.1) + k * 2.1);   // faster flicker
-        const flash = fl > 0 ? fl * fl : 0; // sharp, sparse flashes
-        const al = amt * flash * 0.95;
-        if (al < 0.02) continue;
-        const sz = R * (0.045 + 0.035 * (0.5 + 0.5 * Math.sin(t * 4.0 + k))); // smaller
-        ctx.globalAlpha = al;
-        ctx.drawImage(dot, lx - sz, ly - sz, sz * 2, sz * 2);
+        // sharp, fast on/off: mostly dark with a brief bright flash
+        const fl = Math.sin(t * (6.0 + k * 1.7) + k * 3.1);
+        const on = fl > 0 ? Math.pow(fl, 7) : 0; // brief spike -> appears & vanishes fast
+        const al = amt * on;
+        if (al < 0.03) continue;
+        // position + angle wander so each flash shows up somewhere new
+        const u = nz.fbm(k * 3.3 + t * 0.8, 5.0, 2);
+        const v = nz.fbm(k * 3.3 + 30.0, t * 0.7 + 4.0, 2);
+        const rr = R * 0.68 * Math.sqrt(W.clamp(u, 0, 1));
+        const pang = v * TAU;
+        const lx = cx + Math.cos(pang) * rr, ly = cy + Math.sin(pang) * rr;
+        const oang = nz.fbm(k * 4.9 + t * 0.9, 12.0, 2) * TAU;
+        const len = R * (0.14 + 0.16 * W.clamp(nz.fbm(k * 1.7 + 1.0, t * 0.6, 2), 0, 1));
+        const dx = Math.cos(oang) * len * 0.5, dy = Math.sin(oang) * len * 0.5;
+        ctx.strokeStyle = 'rgba(255,252,242,' + al.toFixed(3) + ')';
+        ctx.lineWidth = 0.7 + (k % 3) * 0.3;
+        ctx.beginPath(); ctx.moveTo(lx - dx, ly - dy); ctx.lineTo(lx + dx, ly + dy); ctx.stroke();
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
