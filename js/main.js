@@ -26,8 +26,8 @@
     imageDisc: 0.62,     // crisp-image disc as a fraction of the gather field (smaller = tighter)
     revealDelay: 1.6,    // seconds of hovering before the image starts to appear
     revealDuration: 3.0, // seconds for the image to fully dissolve in
-    imageRotate: 0.05,   // radians/sec the revealed artwork slowly turns (0 = still)
-    zoomAmp: 0.25,       // how much the revealed artwork breathes larger (0.25 = +25%)
+    imageRotate: 0.08,   // radians/sec the revealed artwork slowly turns (0 = still)
+    zoomAmp: 0.30,       // how much the revealed artwork breathes larger (0.30 = +30%)
     zoomSpeed: 0.16,     // speed of the zoom-in/zoom-out breathing loop (rad/sec)
   };
 

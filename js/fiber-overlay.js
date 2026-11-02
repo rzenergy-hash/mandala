@@ -18,7 +18,7 @@
   const EASE_UP = 0.10, EASE_DOWN = 0.045; // gather on hover; fly away when the cursor stops
   const BANDS = 6;
   const BAND_ALPHA = [0.10, 0.18, 0.30, 0.46, 0.62, 0.74];
-  const WIDTHS = [0.42, 0.68, 0.26]; // even skinnier threads; index 2 = extra-thin filaments
+  const WIDTHS = [0.3, 0.46, 0.2]; // very skinny threads; index 2 = extra-thin filaments
 
   W.FiberOverlay = class FiberOverlay {
     constructor(img, cw, ch, noise, rng, count) {
@@ -145,8 +145,8 @@
           : isLong ? (3.0 + rng() * 5.0)
           : (0.45 + rng() * 1.25);
         len[n] = pxPer * lf * (0.85 + e.m * 0.6) * (0.4 + dep * 1.0);
-        // a gentle bow only on the long non-filament threads; filaments stay straight
-        curveMag[n] = (isVeryLong && !isFilament) ? (rng() - 0.5) * len[n] * 0.28 : 0;
+        // all threads are dead straight now — no bow at all
+        curveMag[n] = 0;
         skinny[n] = isFilament ? 1 : 0;
         phase[n] = rng() * Math.PI * 2;
         n++;
@@ -265,7 +265,7 @@
       const ex0 = this.ex0, ey0 = this.ey0, ex1 = this.ex1, ey1 = this.ey1, cm = this.curveMag;
       // far fibers are thinner, near ones thicker — draw back → mid → front so the
       // layers physically stack, deepening the field
-      const depthW = [0.55, 0.85, 1.2];
+      const depthW = [0.5, 0.78, 1.0];
       for (let lvl = 0; lvl < 3; lvl++) {
         const wmul = depthW[lvl];
         for (let s = 0; s < buckets.length; s++) {
