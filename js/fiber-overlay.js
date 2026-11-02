@@ -327,11 +327,13 @@
         const wv = this.weave, ph = this.phase, tm = this._time || 0, nz = this.noise;
         const cxp = this.cx, cyp = this.cy;
         const LV = 6, maxA = 0.95;
-        // the travelling/morphing offset into the noise field
-        const ox = tm * 0.34, oy = -tm * 0.21 + Math.sin(tm * 0.23) * 1.6;
+        const SW = [0.3, 0.45, 0.65], SWc = SW.length; // skinny, VARIED flash widths
+        // the travelling/morphing offset into the noise field — faster now, so the
+        // bright clusters shift between spots more quickly
+        const ox = tm * 0.72, oy = -tm * 0.46 + Math.sin(tm * 0.5) * 1.9;
         let spk = this._spk;
-        if (!spk) { spk = this._spk = []; for (let l = 0; l < LV; l++) spk.push([]); }
-        for (let l = 0; l < LV; l++) spk[l].length = 0;
+        if (!spk) { spk = this._spk = []; for (let b = 0; b < SWc * LV; b++) spk.push([]); }
+        for (let b = 0; b < SWc * LV; b++) spk[b].length = 0;
         for (let i = 0; i < N; i++) {
           if (!sp[i]) continue;
           const g = W.smoothstep(0.22, 0.7, wv[i]); // only while gathering/gathered
@@ -345,18 +347,21 @@
           const al = g * cluster * sh * sh;
           if (al < 0.05) continue;
           let lvl = (al * LV) | 0; if (lvl >= LV) lvl = LV - 1;
-          spk[lvl].push(i);
+          const wcI = ((ph[i] * 7.3) | 0) % SWc; // per-fibre width class -> varied thickness
+          spk[wcI * LV + lvl].push(i);
         }
-        for (let l = 0; l < LV; l++) {
-          const arr = spk[l]; if (arr.length === 0) continue;
-          ctx.strokeStyle = 'rgba(255,251,240,' + (((l + 0.5) / LV) * maxA).toFixed(3) + ')';
-          ctx.lineWidth = 1.0;
-          ctx.beginPath();
-          for (let k = 0; k < arr.length; k++) {
-            const i = arr[k];
-            ctx.moveTo(ex0[i], ey0[i]); ctx.lineTo(ex1[i], ey1[i]);
+        for (let wcI = 0; wcI < SWc; wcI++) {
+          ctx.lineWidth = SW[wcI];
+          for (let l = 0; l < LV; l++) {
+            const arr = spk[wcI * LV + l]; if (arr.length === 0) continue;
+            ctx.strokeStyle = 'rgba(255,251,240,' + (((l + 0.5) / LV) * maxA).toFixed(3) + ')';
+            ctx.beginPath();
+            for (let k = 0; k < arr.length; k++) {
+              const i = arr[k];
+              ctx.moveTo(ex0[i], ey0[i]); ctx.lineTo(ex1[i], ey1[i]);
+            }
+            ctx.stroke();
           }
-          ctx.stroke();
         }
       }
     }
