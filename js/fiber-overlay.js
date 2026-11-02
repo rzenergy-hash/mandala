@@ -18,7 +18,7 @@
   const EASE_UP = 0.10, EASE_DOWN = 0.045; // gather on hover; fly away when the cursor stops
   const BANDS = 6;
   const BAND_ALPHA = [0.10, 0.18, 0.30, 0.46, 0.62, 0.74];
-  const WIDTHS = [0.3, 0.46, 0.2]; // very skinny threads; index 2 = extra-thin filaments
+  const WIDTHS = [0.3, 0.46, 0.2, 0.75]; // 0/1 short threads, 2 = thin filament, 3 = heavier long line
 
   W.FiberOverlay = class FiberOverlay {
     constructor(img, cw, ch, noise, rng, count) {
@@ -63,6 +63,7 @@
       const len = new Float32Array(N), phase = new Float32Array(N);
       const curveMag = new Float32Array(N); // perpendicular bow for long curved threads
       const skinny = new Uint8Array(N);     // 1 = a long extra-thin filament
+      const thick = new Uint8Array(N);      // 1 = a long line drawn a bit heavier
       const depth = new Float32Array(N);    // 0 = far/back (small, hazy), 1 = near/front
       const dlevel = new Int8Array(N);      // coarse back/mid/front band for draw order
       const cr = new Uint8Array(N), cg = new Uint8Array(N), cb = new Uint8Array(N);
@@ -148,6 +149,9 @@
         // all threads are dead straight now — no bow at all
         curveMag[n] = 0;
         skinny[n] = isFilament ? 1 : 0;
+        // give ~40% of the long lines a slightly heavier stroke (short lines stay
+        // skinny); this wins over the skinny class so some long streaks read bolder
+        thick[n] = ((isVeryLong || isFilament) && rng() < 0.4) ? 1 : 0;
         phase[n] = rng() * Math.PI * 2;
         n++;
       }
@@ -155,7 +159,7 @@
       this.hx = hx; this.hy = hy; this.lx = lx; this.ly = ly;
       this.cosH = cosH; this.sinH = sinH; this.cosL = cosL; this.sinL = sinL;
       this.len = len; this.phase = phase; this.cr = cr; this.cg = cg; this.cb = cb;
-      this.curveMag = curveMag; this.depth = depth; this.dlevel = dlevel; this.skinny = skinny;
+      this.curveMag = curveMag; this.depth = depth; this.dlevel = dlevel; this.skinny = skinny; this.thick = thick;
 
       // dynamic state
       this.cx = new Float32Array(n); this.cy = new Float32Array(n);
@@ -253,12 +257,12 @@
     }
 
     draw(ctx) {
-      const N = this.N, band = this.band, cr = this.cr, cg = this.cg, cb = this.cb, dlv = this.dlevel, sk = this.skinny;
+      const N = this.N, band = this.band, cr = this.cr, cg = this.cg, cb = this.cb, dlv = this.dlevel, sk = this.skinny, tk = this.thick;
       const buckets = this.buckets, sdepth = this.sdepth;
       for (let s = 0; s < buckets.length; s++) buckets[s].length = 0;
       for (let i = 0; i < N; i++) {
         const lum = 0.3 * cr[i] + 0.59 * cg[i] + 0.11 * cb[i];
-        const wc = sk[i] ? 2 : (lum < 120 ? 1 : 0);
+        const wc = tk[i] ? 3 : (sk[i] ? 2 : (lum < 120 ? 1 : 0));
         buckets[this._slot(cr[i], cg[i], cb[i], wc, band[i], dlv[i])].push(i);
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
