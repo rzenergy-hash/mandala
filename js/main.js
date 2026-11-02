@@ -27,6 +27,8 @@
     revealDelay: 1.6,    // seconds of hovering before the image starts to appear
     revealDuration: 3.0, // seconds for the image to fully dissolve in
     imageRotate: 0.05,   // radians/sec the revealed artwork slowly turns (0 = still)
+    zoomAmp: 0.18,       // how much the revealed artwork breathes larger (0.18 = +18%)
+    zoomSpeed: 0.16,     // speed of the zoom-in/zoom-out breathing loop (rad/sec)
   };
 
   class WovenApp {
@@ -272,11 +274,15 @@
       //    reveal melts into the threads with no hard cut, identically in every browser.
       const icx = m.ox + m.dw / 2, icy = m.oy + m.dh / 2;
       const ang = this.time * CONFIG.imageRotate;
+      // breathing zoom: scale eases 1 -> 1+zoomAmp -> 1 forever. The cosine makes
+      // both ends (fully out / fully in) ease to a stop, so the loop point and the
+      // return to original size are perfectly smooth with no jump.
+      const zoom = 1 + CONFIG.zoomAmp * (0.5 - 0.5 * Math.cos(this.time * CONFIG.zoomSpeed));
       tc.setTransform(dpr, 0, 0, dpr, 0, 0);
       tc.clearRect(0, 0, this.W, this.H);
       tc.globalCompositeOperation = 'source-over';
       tc.save();
-      tc.translate(icx, icy); tc.rotate(ang);
+      tc.translate(icx, icy); tc.rotate(ang); tc.scale(zoom, zoom);
       tc.drawImage(img, -m.dw / 2, -m.dh / 2, m.dw, m.dh);
       tc.restore();
 
